@@ -1,43 +1,44 @@
-const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
-const cors = require('cors');
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
+import { JSDOM } from 'jsdom';
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.json());
 
-function extractText(html, selector = null) {
-  const $ = cheerio.load(html);
-  const scope = selector ? $(selector) : $('body');
-  const elements = [];
-
-  scope.find('h1,h2,h3,h4,h5,h6,p').each((_, el) => {
-    const text = $(el).text().trim();
-    if (text) elements.push(text);
-  });
-
-  return elements;
-}
-
 app.post('/compare', async (req, res) => {
-  const { url1, url2, selector1, selector2 } = req.body;
+  const { url1, url2, selector } = req.body;
 
-  try {
-    const [res1, res2] = await Promise.all([
-      axios.get(url1),
-      axios.get(url2),
-    ]);
+  async function extractContent(url) {
+    try {
+      const response = await fetch(url);
+      const html = await response.text();
+      const dom = new JSDOM(html);
+      const document = dom.window.document;
+      const root = selector ? document.querySelector(selector) : document.body;
 
-    const content1 = extractText(res1.data, selector1);
-    const content2 = extractText(res2.data, selector2);
+      if (!root) return [];
 
-    res.json({ content1, content2 });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: 'Failed to fetch or parse one of the URLs.' });
+      const elements = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6,p')).filter(
+        (el) => el.textContent.trim() !== ''
+      );
+
+      return elements.map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        text: el.textContent.trim(),
+      }));
+    } catch (err) {
+      return [{ error: `Failed to fetch or parse ${url}: ${err.message}` }];
+    }
   }
+
+  const [content1, content2] = await Promise.all([extractContent(url1), extractContent(url2)]);
+  res.json({ url1: content1, url2: content2 });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
