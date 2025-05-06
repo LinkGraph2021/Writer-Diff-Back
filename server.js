@@ -20,24 +20,27 @@ app.post('/compare', async (req, res) => {
       const document = dom.window.document;
       const root = selector ? document.querySelector(selector) : document.body;
 
-      if (!root) return [];
+      if (!root) return { headings: [], paragraphs: [] };
 
-      const elements = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6,p')).filter(
-        (el) => el.textContent.trim() !== ''
-      );
+      const headings = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+        .map((el) => el.textContent.trim())
+        .filter(Boolean);
 
-      return elements.map((el) => ({
-        tag: el.tagName.toLowerCase(),
-        text: el.textContent.trim(),
-      }));
+      const paragraphs = Array.from(root.querySelectorAll('p'))
+        .map((el) => el.textContent.trim())
+        .filter(Boolean);
+
+      return { headings, paragraphs };
     } catch (err) {
-      return [{ error: `Failed to fetch or parse ${url}: ${err.message}` }];
+      console.error(err);
+      return { headings: [], paragraphs: [] };
     }
   }
 
-  const [content1, content2] = await Promise.all([extractContent(url1), extractContent(url2)]);
-  res.json({ url1: content1, url2: content2 });
+  const [data1, data2] = await Promise.all([extractContent(url1), extractContent(url2)]);
+  res.json({ url1: data1, url2: data2 });
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
