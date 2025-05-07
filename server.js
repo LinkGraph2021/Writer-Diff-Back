@@ -17,16 +17,18 @@ function extractContent(node) {
   const tagName = node.tagName?.toLowerCase();
 
   if (['h1','h2','h3','h4','h5','h6','p'].includes(tagName)) {
+    const text = node.textContent.trim();
+    if (!text) return null; // ⛔️ Skip empty tags
     return {
       type: tagName,
-      content: node.textContent.trim(),
+      content: text,
       children: []
     };
   }
 
   const children = [];
   node.childNodes.forEach(child => {
-    if (child.nodeType === 1) { // Element node
+    if (child.nodeType === 1) {
       const childContent = extractContent(child);
       if (childContent) children.push(childContent);
     }
@@ -34,6 +36,7 @@ function extractContent(node) {
 
   return children.length > 0 ? { type: 'group', children } : null;
 }
+
 
 function flattenContent(nodes, parentHeading = null) {
   const result = [];
