@@ -9,32 +9,54 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-function serializeContent(node) {
+function extractContent(node) {
   const tagName = node.tagName?.toLowerCase();
 
-  if (!['h1','h2','h3','h4','h5','h6','p','section','article','div'].includes(tagName)) {
-    return null;
+  if (['h1','h2','h3','h4','h5','h6','p'].includes(tagName)) {
+    return {
+      type: tagName,
+      content: node.textContent.trim(),
+      children: []
+    };
   }
 
   const children = [];
   node.childNodes.forEach(child => {
     if (child.nodeType === 1) { // Element node
-      const childSerialized = serializeContent(child);
-      if (childSerialized) children.push(childSerialized);
-    } else if (child.nodeType === 3) { // Text node
-      const text = child.textContent.trim();
-      if (text) children.push({ type: 'text', content: text });
+      const childContent = extractContent(child);
+      if (childContent) children.push(childContent);
     }
   });
 
-  if (['h1','h2','h3','h4','h5','h6','p'].includes(tagName)) {
-    return {
-      type: tagName,
-      content: node.textContent.trim()
-    };
-  }
+  return children.length > 0 ? { type: 'group', children } : null;
+}
 
-  return { type: tagName, children };
+function flattenContent(nodes, parentHeading = null) {
+  const result = [];
+  nodes.forEach(node => {
+    if (!node) return;
+    if (['h1','h2','h3','h4','h5','h6'].includes(node.type)) {
+      const newHeading = { ...node, children: [] };
+      result.push(newHeading);
+      if (node.children.length > 0) {
+        newHeading.children = flattenContent(node.children, newHeading);
+      }
+    } else if (node.type === 'p') {
+      if (parentHeading) {
+        parentHeading.children.push(node);
+      } else {
+        result.push(node);
+      }
+    } else if (node.type === 'group') {
+      const groupContent = flattenContent(node.children, parentHeading);
+      if (parentHeading) {
+        parentHeading.children.push(...groupContent);
+      } else {
+        result.push(...groupContent);
+      }
+    }
+  });
+  return result;
 }
 
 async function extractStructuredContent(url, selector) {
@@ -47,13 +69,15 @@ async function extractStructuredContent(url, selector) {
 
     if (!root) return [];
 
-    const result = [];
+    const rawContent = [];
     root.childNodes.forEach(node => {
-      const serialized = serializeContent(node);
-      if (serialized) result.push(serialized);
+      if (node.nodeType === 1) {
+        const content = extractContent(node);
+        if (content) rawContent.push(content);
+      }
     });
 
-    return result;
+    return flattenContent(rawContent);
   } catch (err) {
     console.error(err);
     return [];
