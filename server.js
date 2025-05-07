@@ -6,7 +6,11 @@ import { JSDOM } from 'jsdom';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// 👇 CORS: allow only GitHub Pages frontend
+app.use(cors({
+  origin: 'https://linkgraph2021.github.io'
+}));
+
 app.use(express.json());
 
 function extractContent(node) {
